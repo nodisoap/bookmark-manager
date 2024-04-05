@@ -28,8 +28,6 @@ public class Bookmark {
 
     @ManyToOne()
     @JoinColumn(name = "owner")
-    @ToString.Exclude
-    @JsonIgnore
     private User owner;
 
     @ManyToOne()
@@ -39,8 +37,15 @@ public class Bookmark {
     @PrePersist
     public void prePersist() {
         if (name == null || name.isEmpty()) {
-            name = "Без имени";
+            name = "Untitled";
         }
     }
 
+    public Bookmark(String name, String url, String description, User owner, Folder folder) {
+        this.name = name;
+        this.url = url;
+        this.description = description;
+        this.owner = owner;
+        this.folder = folder;
+    }
 }

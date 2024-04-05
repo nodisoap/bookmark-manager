@@ -38,13 +38,9 @@ public class User implements UserDetails {
     private Role role;
 
     @OneToMany(mappedBy = "owner", fetch = FetchType.LAZY)
-    @ToString.Exclude
-    @JsonIgnore
     private Set<Bookmark> bookmarks;
 
     @OneToMany(mappedBy = "owner", fetch = FetchType.LAZY)
-    @ToString.Exclude
-    @JsonIgnore
     private Set<Folder> folders;
 
     @Override

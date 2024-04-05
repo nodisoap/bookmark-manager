@@ -6,6 +6,7 @@ import com.example.bookmarkmanager.exception.DuplicateUsernameException;
 import com.example.bookmarkmanager.exception.UnauthorizedException;
 import com.example.bookmarkmanager.exception.UserNotFoundException;
 import com.example.bookmarkmanager.config.JwtService;
+import com.example.bookmarkmanager.folder.FolderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,11 +23,13 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final BookmarkService bookmarkService;
+
+    private final FolderService folderService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     @Transactional
-    public String updateUser(Long userId, UserUpdateRequest updateRequest) {
+    public User updateUser(Long userId, UserUpdateRequest userUpdateRequest) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String currentPrincipalName = authentication.getName();
 
@@ -39,36 +42,33 @@ public class UserService {
             throw new UnauthorizedException("You are not authorized to update this user's info");
         }
 
-        String jwtToken = null;
-
-        if (updateRequest.getUsername() != null && updateRequest.getUsername().length() > 0 &&
-                !Objects.equals(user.getUsername(), updateRequest.getUsername())) {
-            Optional<User> userOptional = userRepository.findByUsername(updateRequest.getUsername());
+        if (userUpdateRequest.getUsername() != null && userUpdateRequest.getUsername().length() > 0 &&
+                !Objects.equals(user.getUsername(), userUpdateRequest.getUsername())) {
+            Optional<User> userOptional = userRepository.findByUsername(userUpdateRequest.getUsername());
             if (userOptional.isPresent()) {
                 throw new DuplicateUsernameException(
                         "Unable to update the username: User with this username already exists"
                 );
             }
-            user.setUsername(updateRequest.getUsername());
-            jwtToken = jwtService.generateToken(user);
+            user.setUsername(userUpdateRequest.getUsername());
         }
-        if (updateRequest.getEmail() != null && updateRequest.getEmail().length() > 0 &&
-                !Objects.equals(user.getEmail(), updateRequest.getEmail())) {
-            Optional<User> userOptional = userRepository.findByEmail(updateRequest.getEmail());
+        if (userUpdateRequest.getEmail() != null && userUpdateRequest.getEmail().length() > 0 &&
+                !Objects.equals(user.getEmail(), userUpdateRequest.getEmail())) {
+            Optional<User> userOptional = userRepository.findByEmail(userUpdateRequest.getEmail());
             if (userOptional.isPresent()) {
                 throw new DuplicateEmailException(
-                        "Unable to update the email: User with email " + updateRequest.getEmail() + " already exists"
+                        "Unable to update the email: User with email " + userUpdateRequest.getEmail() + " already exists"
                 );
             }
-            user.setEmail(updateRequest.getEmail());
+            user.setEmail(userUpdateRequest.getEmail());
         }
-        if (updateRequest.getPassword() != null && updateRequest.getPassword().length() > 0) {
-            String passwordEncoded = passwordEncoder.encode(updateRequest.getPassword());
+        if (userUpdateRequest.getPassword() != null && userUpdateRequest.getPassword().length() > 0) {
+            String passwordEncoded = passwordEncoder.encode(userUpdateRequest.getPassword());
             if (!Objects.equals(user.getPassword(), passwordEncoded)) {
                 user.setPassword(passwordEncoded);
             }
         }
-        return jwtToken;
+        return user;
     }
 
     public void deleteUser(Long userId) {
@@ -84,7 +84,7 @@ public class UserService {
             throw new UnauthorizedException("You are not authorized to delete this user");
         }
 
-        bookmarkService.deleteAllFoldersByOwner();
+        folderService.deleteAllFoldersByOwner();
         userRepository.deleteById(userId);
     }
 }

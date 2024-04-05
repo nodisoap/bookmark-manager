@@ -25,12 +25,13 @@ public class Folder {
 
     @ManyToOne()
     @JoinColumn(name = "owner")
-    @ToString.Exclude
-    @JsonIgnore
     private User owner;
 
     @OneToMany(mappedBy = "folder", fetch = FetchType.LAZY)
-    @ToString.Exclude
-    @JsonIgnore
     private Set<Bookmark> bookmarks;
+
+    public Folder(String name, User owner) {
+        this.name = name;
+        this.owner = owner;
+    }
 }

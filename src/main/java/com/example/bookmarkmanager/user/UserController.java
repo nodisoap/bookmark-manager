@@ -1,5 +1,7 @@
 package com.example.bookmarkmanager.user;
 
+import com.example.bookmarkmanager.auth.AuthenticationService;
+import com.example.bookmarkmanager.config.JwtService;
 import com.example.bookmarkmanager.exception.*;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -12,13 +14,17 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final JwtService jwtService;
 
     @PatchMapping("/{userId}")
     public ResponseEntity<?> updateAccount(
             @PathVariable("userId") Long userId,
-            @RequestBody UserUpdateRequest updateRequest,
+            @RequestBody UserUpdateRequest userUpdateRequest,
             HttpServletResponse response) {
-        String jwtToken = userService.updateUser(userId, updateRequest);
+
+        User updatedUser = userService.updateUser(userId, userUpdateRequest);
+        String jwtToken = jwtService.generateToken(updatedUser);
+
         if (jwtToken != null) {
             return ResponseEntity.ok().body(jwtToken);
         } else {

@@ -14,88 +14,78 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
 public class BookmarkService {
 
     private final BookmarkRepository bookmarkRepository;
+    private final BookmarkMapper bookmarkMapper;
     private final FolderRepository folderRepository;
     private final AuthenticationService authenticationService;
 
-    public List<Bookmark> getAllBookmarks() {
+    public List<BookmarkDTO> getAllBookmarks() {
         User owner = authenticationService.getAuthenticatedUser("Unable to show all bookmarks: User not found");
-        List<Bookmark> bookmarks = bookmarkRepository.findByOwner(owner);
-        if (bookmarks.isEmpty()) {
+
+        List<BookmarkDTO> bookmarkDTOs = bookmarkRepository
+                .findByOwner(owner)
+                .stream()
+                .map(bookmarkMapper::mapToDto).toList();
+
+        if (bookmarkDTOs.isEmpty()) {
             throw new NoBookmarksCreatedException(
                     "Unable to show all bookmarks: No bookmarks created"
             );
         }
-        return bookmarks;
+
+        return bookmarkDTOs;
     }
 
-    public List<Bookmark> getBookmarksByFolder(Long folderId) {
+    public List<BookmarkDTO> getBookmarksByFolder(Long folderId) {
         Optional<Folder> folderOptional = folderRepository.findById(folderId);
         if (folderOptional.isEmpty()) {
             throw new FolderNotFoundException(
                     "Unable to show bookmarks in given folder: Folder with id " + folderId + " not found"
             );
         }
-        List<Bookmark> bookmarks = bookmarkRepository.findByFolderId(folderId);
-        if (bookmarks.isEmpty()) {
+
+        List<BookmarkDTO> bookmarkDTOs = bookmarkRepository
+                .findByFolderId(folderId)
+                .stream()
+                .map(bookmarkMapper::mapToDto).toList();
+        if (bookmarkDTOs.isEmpty()) {
             throw new FolderEmptyException(
                     "Unable to show bookmarks in given folder: Folder with id " + folderId + " is empty"
             );
         }
-        return bookmarks;
-    }
 
-    public List<Folder> getAllFolders() {
-        User owner = authenticationService.getAuthenticatedUser("Unable to show all folders: User not found");
-        List<Folder> folders = folderRepository.findByOwner(owner);
-        if (folders.isEmpty()) {
-            throw new NoFoldersCreatedException(
-                    "Unable to show all folders: No folders created"
-            );
-        }
-        return folders;
+        return bookmarkDTOs;
     }
 
     @Transactional
-    public void addBookmark(Bookmark bookmark) {
+    public void addBookmark(BookmarkDTO bookmarkDTO) {
         User owner = authenticationService.getAuthenticatedUser("Unable to add the bookmark: User not found");
-        Optional<Bookmark> bookmarkOptional = bookmarkRepository.findByUrlAndOwner(bookmark.getUrl(), owner);
+
+        Folder folder = folderRepository.findById(bookmarkDTO.getFolderId())
+                .orElseThrow(() -> new FolderNotFoundException(
+                        "Unable to add the bookmark: Folder with id " + bookmarkDTO.getFolderId() +
+                                " does not exist"
+                ));
+
+        Bookmark bookmark = bookmarkMapper.mapToBookmark(bookmarkDTO, owner, folder);
+        Optional<Bookmark> bookmarkOptional = bookmarkRepository.findByUrlAndFolder(bookmark.getUrl(), folder);
         if (bookmarkOptional.isPresent()) {
             throw new DuplicateBookmarkException(
-                    "Unable to add the bookmark: Bookmark with this url already exists"
+                    "Unable to add the bookmark: Bookmark with this url already exists in given folder"
             );
         }
-        Optional<Folder> folderOptional = folderRepository.findById(bookmark.getFolder().getId());
-        if (folderOptional.isEmpty()) {
-            throw new FolderNotFoundException(
-                    "Unable to add the bookmark: Folder with id " + bookmark.getFolder().getId() +
-                            " does not exist"
-            );
-        }
-        bookmark.setOwner(owner);
+
         bookmarkRepository.save(bookmark);
     }
 
     @Transactional
-    public void addFolder(Folder folder) {
-        User owner = authenticationService.getAuthenticatedUser("Unable to add the folder: User not found");
-        Optional<Folder> folderOptional = folderRepository.findByNameAndOwner(folder.getName(), owner);
-        if (folderOptional.isPresent()) {
-            throw new DuplicateFolderException(
-                    "Unable to add the folder: Folder with this name already exists"
-            );
-        }
-        folder.setOwner(owner);
-        folderRepository.save(folder);
-    }
-
-    @Transactional
-    public void updateBookmark(Long bookmarkId, BookmarkUpdateRequest updateRequest) {
+    public void updateBookmark(Long bookmarkId, BookmarkDTO bookmarkDTO) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String currentPrincipalName = authentication.getName();
 
@@ -108,58 +98,47 @@ public class BookmarkService {
             throw new UnauthorizedException("You are not authorized to update this bookmark");
         }
 
-        if (updateRequest.getFolderId() != null &&
-                !Objects.equals(bookmark.getFolder().getId(), updateRequest.getFolderId())
+        if (bookmarkDTO.getFolderId() != null &&
+                !Objects.equals(bookmark.getFolder().getId(), bookmarkDTO.getFolderId())
         ) {
-            Folder folder = folderRepository.findById(updateRequest.getFolderId())
+            Folder folder = folderRepository.findById(bookmarkDTO.getFolderId())
                     .orElseThrow(() -> new FolderNotFoundException(
-                            "Unable to update the bookmark: Folder with id " + updateRequest.getFolderId() +
+                            "Unable to update the bookmark: Folder with id " + bookmarkDTO.getFolderId() +
                                     " does not exist."
                     ));
+            Optional<Bookmark> bookmarkOptional = bookmarkRepository
+                    .findByUrlAndFolder(bookmarkDTO.getUrl(), folder);
+            if (bookmarkOptional.isPresent()) {
+                throw new DuplicateBookmarkException(
+                        "Unable to update the bookmark: Bookmark with this url already exists in given folder"
+                );
+            }
             bookmark.setFolder(folder);
         }
 
-        if (updateRequest.getName() != null && updateRequest.getName().length() > 0 &&
-                !Objects.equals(bookmark.getName(), updateRequest.getName())
+        if (bookmarkDTO.getName() != null && bookmarkDTO.getName().length() > 0 &&
+                !Objects.equals(bookmark.getName(), bookmarkDTO.getName())
         ) {
-            bookmark.setName(updateRequest.getName());
+            bookmark.setName(bookmarkDTO.getName());
         }
 
-        if (updateRequest.getUrl() != null && updateRequest.getUrl().length() > 0 &&
-                !Objects.equals(bookmark.getUrl(), updateRequest.getUrl())
+        if (bookmarkDTO.getUrl() != null && bookmarkDTO.getUrl().length() > 0 &&
+                !Objects.equals(bookmark.getUrl(), bookmarkDTO.getUrl())
         ) {
-            User owner = bookmark.getOwner();
-            Optional<Bookmark> bookmarkOptional = bookmarkRepository.findByUrlAndOwner(updateRequest.getUrl(), owner);
+            Folder folder = bookmark.getFolder();
+            Optional<Bookmark> bookmarkOptional = bookmarkRepository
+                    .findByUrlAndFolder(bookmarkDTO.getUrl(), folder);
             if (bookmarkOptional.isPresent()) {
                 throw new DuplicateBookmarkException(
-                        "Unable to update the bookmark: Bookmark with this url already exists"
+                        "Unable to update the bookmark: Bookmark with this url already exists in given folder"
                 );
             }
-            bookmark.setUrl(updateRequest.getUrl());
+            bookmark.setUrl(bookmarkDTO.getUrl());
         }
 
-        if (updateRequest.getDescription() != null &&
-                !Objects.equals(bookmark.getDescription(), updateRequest.getDescription())) {
-            bookmark.setDescription(updateRequest.getDescription());
-        }
-    }
-
-    @Transactional
-    public void updateFolder(Long folderId, String name) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String currentPrincipalName = authentication.getName();
-
-        Folder folder = folderRepository.findById(folderId)
-                .orElseThrow(() -> new FolderNotFoundException(
-                        "Unable to update the folder: Folder with id " + folderId + " does not exist"
-                ));
-
-        if (!folder.getOwner().getUsername().equals(currentPrincipalName)) {
-            throw new UnauthorizedException("You are not authorized to update this folder");
-        }
-
-        if (name != null && name.length() > 0 && !Objects.equals(folder.getName(), name)) {
-            folder.setName(name);
+        if (bookmarkDTO.getDescription() != null &&
+                !Objects.equals(bookmark.getDescription(), bookmarkDTO.getDescription())) {
+            bookmark.setDescription(bookmarkDTO.getDescription());
         }
     }
 
@@ -168,10 +147,10 @@ public class BookmarkService {
         String currentPrincipalName = authentication.getName();
 
         Bookmark bookmark = bookmarkRepository.findById(bookmarkId)
-                        .orElseThrow(() -> new BookmarkNotFoundException(
-                                "Unable to delete the bookmark: Bookmark with id " + bookmarkId +
-                                        " does not exist"
-                        ));
+                .orElseThrow(() -> new BookmarkNotFoundException(
+                        "Unable to delete the bookmark: Bookmark with id " + bookmarkId +
+                                " does not exist"
+                ));
 
         if (!bookmark.getOwner().getUsername().equals(currentPrincipalName)) {
             throw new UnauthorizedException("You are not authorized to delete this bookmark");
@@ -195,34 +174,16 @@ public class BookmarkService {
         }
     }
 
-    public void deleteFolder(Long folderId) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String currentPrincipalName = authentication.getName();
-
-        Folder folder = folderRepository.findById(folderId)
-                .orElseThrow(() -> new FolderNotFoundException(
-                        "Unable to delete the folder: Folder with id " + folderId +
-                                " does not exist"
-                ));
-
-        if (!folder.getOwner().getUsername().equals(currentPrincipalName)) {
-            throw new UnauthorizedException("You are not authorized to delete this folder");
-        }
-
+    public void deleteBookmarksByFolder(Long folderId) {
         List<Bookmark> bookmarks = bookmarkRepository.findByFolderId(folderId);
-        for (Bookmark bookmark : bookmarks) {
-            deleteBookmark(bookmark.getId());
-        }
-
-        folderRepository.deleteById(folderId);
-    }
-
-    public void deleteAllFoldersByOwner() {
-        User owner = authenticationService.getAuthenticatedUser("Unable to delete all folders : User not found");
-
-        List<Folder> folders = folderRepository.findByOwner(owner);
-        for (Folder folder : folders) {
-            deleteFolder(folder.getId());
+        if (bookmarks.isEmpty()) {
+            throw new FolderEmptyException(
+                    "Unable to delete bookmarks in given folder: Folder with id " + folderId + " is empty"
+            );
+        } else {
+            for (Bookmark bookmark : bookmarks) {
+                deleteBookmark(bookmark.getId());
+            }
         }
     }
 }

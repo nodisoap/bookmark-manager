@@ -1,7 +1,9 @@
-package com.example.bookmarkmanager.bookmark;
+package com.example.bookmarkmanager.folder;
 
+import com.example.bookmarkmanager.bookmark.Bookmark;
+import com.example.bookmarkmanager.bookmark.BookmarkDTO;
+import com.example.bookmarkmanager.bookmark.BookmarkService;
 import com.example.bookmarkmanager.exception.*;
-import com.example.bookmarkmanager.folder.Folder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -10,40 +12,46 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/bookmarks")
+@RequestMapping("/api/folders")
 @RequiredArgsConstructor
-public class BookmarkController {
+public class FolderController {
 
+    private final FolderService folderService;
     private final BookmarkService bookmarkService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public void addBookmark(@RequestBody BookmarkDTO bookmarkDTO) {
-        bookmarkService.addBookmark(bookmarkDTO);
+    public void addFolder(@RequestParam String name) {
+        folderService.addFolder(name);
     }
 
     @GetMapping
-    public List<BookmarkDTO> getAllBookmarks() {
-        return bookmarkService.getAllBookmarks();
+    public List<FolderDTO> getAllFolders() {
+        return folderService.getAllFolders();
     }
 
-    @PatchMapping("/{bookmarkId}")
+    @GetMapping("/{folderId}")
+    public List<BookmarkDTO> getBookmarksByFolder(@PathVariable Long folderId) {
+        return bookmarkService.getBookmarksByFolder(folderId);
+    }
+
+    @PatchMapping("/{folderId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void updateBookmark(
-            @PathVariable("bookmarkId") Long bookmarkId,
-            @RequestBody BookmarkDTO bookmarkDTO
+    public void updateFolder(
+            @PathVariable("folderId") Long folderId,
+            @RequestParam String name
     ) {
-        bookmarkService.updateBookmark(bookmarkId, bookmarkDTO);
+        folderService.updateFolder(folderId, name);
     }
 
-    @DeleteMapping("/{bookmarkId}")
-    public void deleteBookmark(@PathVariable("bookmarkId") Long bookmarkId) {
-        bookmarkService.deleteBookmark(bookmarkId);
+    @DeleteMapping("/{folderId}")
+    public void deleteFolder(@PathVariable("folderId") Long folderId) {
+        folderService.deleteFolder(folderId);
     }
 
     @DeleteMapping
-    public void deleteAllBookmarksByOwner() {
-        bookmarkService.deleteAllBookmarksByOwner();
+    public void deleteAllFoldersByOwner() {
+        folderService.deleteAllFoldersByOwner();
     }
 
     @ExceptionHandler(IllegalStateException.class)
@@ -58,20 +66,20 @@ public class BookmarkController {
         return new ResponseEntity<>(exceptionResponse, e.getStatusCode());
     }
 
-    @ExceptionHandler(NoBookmarksCreatedException.class)
-    public ResponseEntity<ExceptionResponse> handleNoBookmarksFoundException(NoBookmarksCreatedException e) {
+    @ExceptionHandler(FolderEmptyException.class)
+    public ResponseEntity<ExceptionResponse> handleFolderEmptyException(FolderEmptyException e) {
         ExceptionResponse exceptionResponse = new ExceptionResponse(e.getStatusCode().value(), e.getReason());
         return new ResponseEntity<>(exceptionResponse, e.getStatusCode());
     }
 
-    @ExceptionHandler(BookmarkNotFoundException.class)
-    public ResponseEntity<ExceptionResponse> handleBookmarkNotFoundException(BookmarkNotFoundException e) {
+    @ExceptionHandler(FolderNotFoundException.class)
+    public ResponseEntity<ExceptionResponse> handleFolderNotFoundException(FolderNotFoundException e) {
         ExceptionResponse exceptionResponse = new ExceptionResponse(e.getStatusCode().value(), e.getReason());
         return new ResponseEntity<>(exceptionResponse, e.getStatusCode());
     }
 
-    @ExceptionHandler(DuplicateBookmarkException.class)
-    public ResponseEntity<ExceptionResponse> handleDuplicateBookmarkException(DuplicateBookmarkException e) {
+    @ExceptionHandler(NoFoldersCreatedException.class)
+    public ResponseEntity<ExceptionResponse> handleNoFoldersCreatedException(NoFoldersCreatedException e) {
         ExceptionResponse exceptionResponse = new ExceptionResponse(e.getStatusCode().value(), e.getReason());
         return new ResponseEntity<>(exceptionResponse, e.getStatusCode());
     }
@@ -87,5 +95,4 @@ public class BookmarkController {
         ExceptionResponse exceptionResponse = new ExceptionResponse(e.getStatusCode().value(), e.getReason());
         return new ResponseEntity<>(exceptionResponse, e.getStatusCode());
     }
-
 }
